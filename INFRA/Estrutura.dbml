@@ -1,0 +1,104 @@
+// === CONTEXTO GEOGRÁFICO ===
+
+Table Estado {
+  id varchar [pk, note: "Sigla da UF (ex: PE, SP)"]
+  nome varchar [not null]
+  poligono geometry [note: "Fronteiras espaciais para o PostGIS"]
+}
+
+Table Cidade {
+  id integer [pk, note: "Código IBGE"]
+  nome varchar [not null]
+  estado_id varchar [ref: > Estado.id]
+  coordenadas geometry [note: "Ponto Lat/Lng central da cidade"]
+}
+
+// === CONTEXTO DE USUÁRIOS ===
+
+Table Usuario {
+  id integer [pk, increment]
+  email varchar [unique, not null]
+  cidade_natal_id integer [ref: > Cidade.id, note: "Essencial para mecânica de Golpe de Estado"]
+  cidade_atual_id integer [note: "Atualizado via geolocalização no navegador"]
+  afiliacao varchar [note: "Neutro, Alistado"]
+  giria_apoiada_id integer [null, note: "Pode ser nulo se for neutro"]
+  criado_em timestamp [default: `now()` ]
+}
+
+// === CONTEXTO DE GÍRIAS E DOMÍNIO ===
+
+Table Giria {
+  id integer [pk, increment]
+  expressao varchar [not null, note: "Ex: Mano, Boy, Uai"]
+  cidade_origem_id integer [ref: > Cidade.id]
+  estado_atual varchar [note: "Infiltrada, Ativa, Em_Recuperacao, Regional"]
+  contador_hegemonia integer [default: 1, note: "Quantidade histórica de estados conquistados (1 a 26)"]
+  criado_em timestamp [default: `now()` ]
+}
+
+Table Dominio_Territorial {
+  id integer [pk, increment]
+  giria_id integer [ref: > Giria.id]
+  cidade_id integer [null, ref: > Cidade.id, note: "Nulo se o domínio for do Estado inteiro"]
+  estado_id varchar [null, ref: > Estado.id, note: "Preenchido quando a gíria vira Regional"]
+  porcentagem decimal(5,2) [not null, note: "0.00 a 100.00"]
+  flag_golpe boolean [default: false]
+  atualizado_em timestamp [default: `now()` ]
+
+  Note: "Tabela altamente estressada. Guarda quem domina qual pedaço."
+}
+
+// === CONTEXTO DE CONFLITOS E BATALHAS ===
+
+Table Disputa {
+  id integer [pk, increment]
+  giria_atacante_id integer [ref: > Giria.id]
+  giria_defensora_id integer [ref: > Giria.id]
+  cidade_conflito_id integer [ref: > Cidade.id, note: "Cidade fronteiriça ou onde ocorre o Golpe"]
+  tipo_disputa varchar [note: "Fronteira, Recuperacao, Golpe_Estado, Regional"]
+  status varchar [note: "Agendada, Em_Andamento, Finalizada, Empatada"]
+  iniciado_em timestamp
+  termina_em timestamp [note: "Calcula as janelas de 4h, ou 2 dias de espera"]
+}
+
+Table Voto_Disputa {
+  id integer [pk, increment]
+  disputa_id integer [ref: > Disputa.id]
+  usuario_id integer [ref: > Usuario.id]
+  giria_escolhida_id integer [ref: > Giria.id, note: "Permite traição (votar contra a própria gíria)"]
+  votado_em timestamp [default: `now()` ]
+
+  Note: "Sob alta carga, estes votos acumulam primeiro no Redis e depois entram aqui em lote (batch)."
+}
+
+// === CONTEXTO DE MECÂNICAS ESPECIAIS ===
+
+Table Revolta_Armada {
+  id integer [pk, increment]
+  giria_derrotada_id integer [ref: > Giria.id]
+  giria_ganhadora_id integer [ref: > Giria.id]
+  iniciado_em timestamp
+  limite_em timestamp [note: "Janela estrita de 6 horas para juntar os 50%"]
+  sucesso boolean [null]
+}
+
+Table Tratado_Paz {
+  id integer [pk, increment]
+  estado_id varchar [ref: > Estado.id]
+  giria_dominante_id integer [ref: > Giria.id]
+  tentativas_golpe integer [default: 0, note: "Limite de 2 antes do acordo"]
+  pacto_ativo boolean [default: false, note: "Pacto de não-agressão"]
+}
+
+Table Voto_Intencao {
+  id integer [pk, increment]
+  usuario_id integer [ref: > Usuario.id]
+  giria_id integer [ref: > Giria.id]
+  estado_id varchar [ref: > Estado.id]
+  criado_em timestamp [default: `now()` ]
+
+  Note: "Permite apenas um voto por usuário por estado. Interação leve."
+}
+
+// Relacionamento tardio para evitar ciclo direto na criação da tabela Usuario
+Ref: Usuario.giria_apoiada_id > Giria.id
